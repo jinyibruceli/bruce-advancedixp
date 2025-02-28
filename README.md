@@ -10,7 +10,7 @@ The development of this system went through **three iterations**, refining the i
 ---
 
 ## State Diagram
-<img width="820" alt="截屏2025-02-28 09 25 33" src="https://github.com/user-attachments/assets/ec26b086-7776-4f0f-b8ae-f7ec867dbf79" />  
+<img width="820" alt="截屏2025-02-28 09 25 33" src="https://github.com/user-attachments/assets/ec26b086-7776-4f0f-b8ae-f7ec867dbf79" />  <br>
 This diagram outlines the interactive behavior of the prototype, illustrating how the system transitions between different states when an impact occurs.
 
 ---
@@ -24,7 +24,7 @@ The project consists of the following hardware components:
 - **Built-in NeoPixel LED (Pin 1)** – Provides immediate visual feedback.
 - **Wires and connectors** – Ensure reliable connections between components.
 - **Paper made airplane (huge)** – To contain all the components.
-
+<br>
 
 <img width="840" alt="截屏2025-02-28 09 46 36" src="https://github.com/user-attachments/assets/55f584c8-8efe-4717-9433-358028bbe691" />
 
@@ -94,16 +94,23 @@ while True:
 - **Adhesive materials (tape/glue)** – Securely attach components to the structure.
 
  **Hiting components Attempt 1** 
+ <br>
  <img width="389" alt="截屏2025-02-28 09 42 36" src="https://github.com/user-attachments/assets/1f7a158d-b71b-4e29-a8bc-f9a12053d2e5" />
+ <br>
  I first designed a circle, and imaging to put the foil at two side of it. But it keeps slides elsewhere when the plane hit something, in this case the foil paper won't touch. So I am thinking to design a new one that increase the area of foil paper.
 
  **Hiting components Attempt 2** 
+ <br>
 <img width="459" alt="截屏2025-02-28 09 31 44" src="https://github.com/user-attachments/assets/db68c61d-669c-4d03-82f1-1d272e8ea083" />
+<br>
 My second attempt is use the foil paper to make a stick inside a circle. I am expecting to have more success rate by increase the foil paper area. But I quickly realized that I am not able to fit this huge installation onto my plane's top. So I need to design a smaller one.
 
  **Hiting components Attempt 3** 
+ <br>
 <img width="696" alt="截屏2025-02-28 09 38 22" src="https://github.com/user-attachments/assets/8680dd73-0c47-4a52-a9bd-01013c73cc48" />
+<br>
 <img width="334" alt="截屏2025-02-28 09 40 56" src="https://github.com/user-attachments/assets/67ad9b6b-9f98-47df-a490-1c5f4da42a2c" />
+<br>
 In this version, finally the success rate comes up and it work as expected. It will touch while hit something, and the size is acceptable.
 
 ---
