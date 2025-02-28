@@ -10,7 +10,7 @@ The development of this system went through **three iterations**, refining the i
 ---
 
 ## State Diagram
-<img width="820" alt="截屏2025-02-28 09 25 33" src="https://github.com/user-attachments/assets/ec26b086-7776-4f0f-b8ae-f7ec867dbf79" />
+<img width="820" alt="截屏2025-02-28 09 25 33" src="https://github.com/user-attachments/assets/ec26b086-7776-4f0f-b8ae-f7ec867dbf79" />  
 This diagram outlines the interactive behavior of the prototype, illustrating how the system transitions between different states when an impact occurs.
 
 ---
