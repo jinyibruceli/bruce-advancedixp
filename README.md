@@ -1,123 +1,234 @@
-# Drone Impact Detection System
+# Boxing Gloves Project Summary
 
-## Introduction
-This project is a **drone impact detection system** that triggers an LED animation upon collision. The system detects collisions using **metal plates (initially copper, later switched to aluminum for increased surface area)**. When the plates make contact, they activate a programmed sequence of LED color changes.
-
-The design includes a **large paper airplane** structure to accommodate electronic components, with the impact detection system placed at the **front** to act as a counterweight.
-
-The development of this system went through **three iterations**, refining the impact detection mechanism and optimizing component placement.
+## Project Overview
+Boxing gloves is an interactive boxing training device that integrates **M5 StickC Plus**, an **IMU sensor**, and a **real-time UI feedback system**. The gloves detects punch movements, changes LED colors dynamically, and provides **real-time feedback** to help users track their performance. The project successfully combines hardware, software, and UI into a **seamless, engaging training experience**.
 
 ---
 
-## State Diagram
-<img width="820" alt="截屏2025-02-28 09 25 33" src="https://github.com/user-attachments/assets/ec26b086-7776-4f0f-b8ae-f7ec867dbf79" />  <br>
-This diagram outlines the interactive behavior of the prototype, illustrating how the system transitions between different states when an impact occurs.
+## From Concept to Implementation
+
+### Initial Concept & Prototyping
+The original goal was to create a simple but effective **boxing training assistant** that reacts to punches with **visual indicators** and provides feedback in real-time. The prototype focused on:
+
+- Accurately detecting punch movements  
+- Providing **LED-based feedback** (color changes)  
+- Implementing **smooth UI animations** for a responsive feel  
+- Ensuring **hardware and software work in sync**  
+
+The initial **state machine logic** had a straightforward flow: **blue for punch detection, green for correct position, and red when the goal was met**. However, after testing, adjustments were necessary to improve **responsiveness and accuracy**.
+<img width="662" alt="截屏2025-03-21 12 57 59" src="https://github.com/user-attachments/assets/4ef9c36d-beae-4d78-981a-a5ae8c870a58" />
+
 
 ---
 
-## Hardware
-The project consists of the following hardware components:
+## Hardware Integration
 
-- **ESP32 (or compatible microcontroller)** – Handles input from impact sensor and controls LED outputs.
-- **Aluminum hitting component** – Detect physical contact and trigger the system.
-- **NeoPixel LED strip (30 LEDs, connected to Pin 7)** – Displays impact animations.
-- **Built-in NeoPixel LED (Pin 1)** – Provides immediate visual feedback.
-- **Wires and connectors** – Ensure reliable connections between components.
-- **Paper made airplane (huge)** – To contain all the components.
-<br>
+### Components Used
+- **M5 StickC Plus** – Main controller  
+- **IMU Pro Unit** – Motion detection  
+- **NeoPixel LED Strip** – Visual feedback  
 
-<img width="840" alt="截屏2025-02-28 09 46 36" src="https://github.com/user-attachments/assets/55f584c8-8efe-4717-9433-358028bbe691" />
+### How It Works
+1. **Punch Detection** – The gloves detects acceleration changes and turns blue when a punch is detected.  
+2. **Target Position Confirmation** – If the punch reaches the correct position, the light turns green.  
+3. **Counting Punches** – The system keeps track of successful punches. Once the target number is reached, the LED flashes red.  
+4. **Smooth Transitions** – A **rainbow LED animation** plays when the session is complete.  
 
 ---
 
-## Firmware
-Below is the MicroPython code running on the microcontroller:
+## Software & Code Implementation
+
+### State Machine Logic
+| **State** | **Condition** | **LED Color** |  
+|------------|--------------|--------------|  
+| **Idle** (waiting for punch) | Default state | Green |  
+| **Punch detected** | IMU detects high acceleration | Blue |  
+| **Punch completed** | Acceleration drops, punch counted | Red |  
+
+- **Preventing False Triggers** – A **minimum time threshold** ensures only valid punches are counted.  
+- **Reset Function** – Pressing a button resets the system and restores the initial green light.
 
 ```python
-from machine import Pin, ADC
-from time import sleep, sleep_ms, ticks_ms
+import os, sys, io
+import M5
+from M5 import *
+from hardware import I2C
+from hardware import Pin, ADC
+from unit import IMUProUnit
+from time import sleep_ms
 from neopixel import NeoPixel
+import m5utils  # remap function
+import time
+import math
 
-# Configure impact sensor input
-touch_pin = Pin(1, Pin.IN, Pin.PULL_UP)
+M5.begin()
 
-# Configure LED outputs
-np = NeoPixel(Pin(35), 1)   # Built-in LED
-np7 = NeoPixel(Pin(7), 30)  # External LED strip
+# Configure I2C port
+i2c = I2C(0, scl=Pin(1), sda=Pin(2), freq=100000)
+# Configure IMU
+imu = IMUProUnit(i2c)
 
-# Define colors
-GREEN = (0, 255, 0)   # Default state
-RED = (255, 0, 0)     # Impact detected
-OFF = (0, 0, 0)       # LEDs off
+# Configure NeoPixel
+np = NeoPixel(Pin(7), 30)
 
-# Function to set all LEDs
-def set_all_leds(color):
-    np[0] = color
-    np.write()
-    for i in range(30):
-        np7[i] = color
-    np7.write()
+###############################################################################
+# State machine:
+#   state = 0 => Green  (waiting to punch / initial or reset state)
+#   state = 1 => Blue   (punch in progress)
+#   state = 2 => Red    (punch complete)
+###############################################################################
+state = 0
 
-# Default: Green
-touch_state = False
-set_all_leds(GREEN)
+# Thresholds (tweak as needed)
+THRESHOLD_PUNCH = 2.0       # Acceleration threshold to detect punch
+THRESHOLD_RESET = 0.6       # Acceleration threshold to detect punch release
+MIN_BLUE_DURATION = 500     # Minimum time in blue state (ms)
+PUNCH_LIMIT = 10            # Show rainbow animation after this many punches
+
+# Punch counter
+punch_count = 0
+
+# Flags for animation/button
+stop_updates = False
+reset_requested = False
+
+# Track current LED color to reduce redundant updates
+current_color = None
+
+# Initial acceleration reading
+last_accel = imu.get_accelerometer()
+
+# Track punch start time for blue state timing
+punch_start_time = 0
+
+def set_led(color):
+    """Update LEDs only when color changes to avoid flicker"""
+    global current_color
+    if current_color != color:
+        for i in range(len(np)):
+            np[i] = color
+        np.write()
+        current_color = color
+
+def rainbow_animation(duration=3000):
+    """Rainbow animation, interruptible by reset"""
+    global stop_updates, reset_requested
+    stop_updates = True
+    start_time = time.ticks_ms()
+
+    while time.ticks_diff(time.ticks_ms(), start_time) < duration:
+        if reset_requested:
+            return
+        for i in range(len(np)):
+            hue = (i * 12 + time.ticks_ms() // 10) % 360
+            r = int(127.5 * (1 + math.cos(math.radians(hue))))
+            g = int(127.5 * (1 + math.cos(math.radians(hue + 120))))
+            b = int(127.5 * (1 + math.cos(math.radians(hue + 240))))
+            np[i] = (r, g, b)
+        np.write()
+        sleep_ms(50)
+
+    stop_updates = False
+
+# Initial state: green
+set_led((0, 255, 0))
 
 while True:
-    if touch_pin.value() == 0 and not touch_state:
-        touch_state = True
-        set_all_leds(RED)
-        sleep(2)
-        for _ in range(2):
-            set_all_leds(RED)
-            sleep(1)
-            set_all_leds(OFF)
-            sleep(0.5)
-        set_all_leds(RED)
-    elif touch_pin.value() == 1 and touch_state:
-        touch_state = False
-        set_all_leds(GREEN)
-    sleep_ms(10)
+    # Pause main loop if rainbow animation is running
+    if stop_updates:
+        continue
+
+    # Update M5 state
+    M5.update()
+
+    # Button A: Reset
+    if BtnA.wasPressed():
+        punch_count = 0
+        reset_requested = True    # Tell animation to stop
+        stop_updates = False      # Resume main loop
+        state = 0                 # Back to green
+        set_led((0, 255, 0))      # Set LED to green
+        print("Reset triggered!")
+        continue
+
+    # Read current acceleration
+    accel = imu.get_accelerometer()
+    delta_x = abs(accel[0] - last_accel[0])
+    delta_y = abs(accel[1] - last_accel[1])
+    delta_z = abs(accel[2] - last_accel[2])
+    total_change = delta_x + delta_y + delta_z
+
+    # State machine
+    if state == 0:
+        # Waiting for punch (green)
+        if total_change > THRESHOLD_PUNCH:
+            state = 1
+            punch_start_time = time.ticks_ms()
+            set_led((0, 0, 255))  # Blue
+            print("Punch detected")
+
+    elif state == 1:
+        # Punch in progress (blue)
+        elapsed = time.ticks_diff(time.ticks_ms(), punch_start_time)
+        if elapsed >= MIN_BLUE_DURATION and total_change < THRESHOLD_RESET:
+            state = 2
+            punch_count += 1
+            print("Punch")
+            set_led((255, 0, 0))  # Red
+
+            if punch_count >= PUNCH_LIMIT:
+                print("Punch end")
+                rainbow_animation()
+                punch_count = 0
+                print("Count reset after animation")
+                set_led((255, 0, 0))  # Stay red after animation
+
+    elif state == 2:
+        # Punch complete (red)
+        if total_change > THRESHOLD_PUNCH:
+            state = 1
+            punch_start_time = time.ticks_ms()
+            set_led((0, 0, 255))  # Blue
+            print("Punch detected")
+
+    # Store last acceleration
+    last_accel = accel
+    sleep_ms(100)
 ```
 
-### Key Features:
-- **Default green light**
-- **Impact detection (plates touch)** triggers a **red light for 2 seconds**
-- **Two flashes (1s on, 0.5s off)**
-- **Permanent red light after flashes**
-- **Resets to green when plates separate**
 
 ---
 
-## Physical Components
-- **Paper airplane frame** – Provides aerodynamic stability and supports electronics.
-- **3D-printed mount (optional)** – Houses electronics and impact plates.
-- **Adhesive materials (tape/glue)** – Securely attach components to the structure.
+## UI & Interaction
 
- **Hiting components Attempt 1** 
- <br>
- <img width="389" alt="截屏2025-02-28 09 42 36" src="https://github.com/user-attachments/assets/1f7a158d-b71b-4e29-a8bc-f9a12053d2e5" />
- <br>
- I first designed a circle, and imaging to put the foil at two side of it. But it keeps slides elsewhere when the plane hit something, in this case the foil paper won't touch. So I am thinking to design a new one that increase the area of foil paper.
+### UI Design & Feedback
+- The **central circle shrinks when punching and expands when retracting**, creating a dynamic and **fluid animation**.  
+- The **real-time interaction** makes training **more immersive** and visually responsive.  
+- The UI prototype was designed in **ProtoPie**, featuring a **minimalistic, clear layout**.  
+<img width="1470" alt="截屏2025-03-21 12 41 26" src="https://github.com/user-attachments/assets/e1d83a07-2249-4e5f-bccf-96fa9e3ae870" />
 
- **Hiting components Attempt 2** 
- <br>
-<img width="459" alt="截屏2025-02-28 09 31 44" src="https://github.com/user-attachments/assets/db68c61d-669c-4d03-82f1-1d272e8ea083" />
-<br>
-My second attempt is use the foil paper to make a stick inside a circle. I am expecting to have more success rate by increase the foil paper area. But I quickly realized that I am not able to fit this huge installation onto my plane's top. So I need to design a smaller one.
-
- **Hiting components Attempt 3** 
- <br>
-<img width="696" alt="截屏2025-02-28 09 38 22" src="https://github.com/user-attachments/assets/8680dd73-0c47-4a52-a9bd-01013c73cc48" />
-<br>
-<img width="334" alt="截屏2025-02-28 09 40 56" src="https://github.com/user-attachments/assets/67ad9b6b-9f98-47df-a490-1c5f4da42a2c" />
-<br>
-In this version, finally the success rate comes up and it work as expected. It will touch while hit something, and the size is acceptable.
 
 ---
 
-## Project Outcome
-This system successfully detects impacts and provides clear visual feedback via an LED animation. The design has gone through multiple refinements to ensure reliability and robustness.
+## Challenges & Solutions
 
-Final demo video:
-(https://drive.google.com/file/d/130Ylu_2bFULq6-qVu4J6zWQZxDL2UjYT/view?usp=sharing)
+### Debugging Thonny Output Issues
+At first, I tried **printing variables directly in Thonny**, but the results were inconsistent. To debug, I decided to trigger **different print outputs** for each event and handled them in **ProtoPie** instead. This approach solved the issue and allowed me to manage UI updates more efficiently.
 
+### ProtoPie Variable Issues
+ProtoPie's variable management was frustrating. Initially, I kept getting **"variable not found" errors**, and I couldn’t figure out why. Later, I realized it was because I **didn’t have a premium account**, which limited access to certain features. I ended up borrowing **Juni’s account** to make it work.
+
+---
+
+## Final Outcome
+
+### What Worked Well
+- **Accurate punch detection** without false triggers  
+- **Seamless LED transitions** synced with real-time movements  
+- **UI animations** that made interactions feel smooth and engaging  
+- **Adjustments to state logic** improved response times and overall experience  
+
+Dispite the challenges, the final implementation **works smoothly**. The **real-time UI animations**, especially the dynamic circle scaling, add a polished, interactive feel to the training experience. This project shows how a simple idea can evolve into an intuitive and well-integrated system when **hardware, software, and UI are carefully designed together**.
+
+### Video:
+https://drive.google.com/file/d/1YJkU27xxd4wirRr5go8Ry3cIKph-pwnK/view?usp=sharing
