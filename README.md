@@ -34,8 +34,6 @@ It evolved through multiple **design** and **code iterations**, refining both th
 - Used **2cm LED strip** around the circular edge.
 - Maintained Bubble Memo's **playful aesthetic**.
 
-**Note**: Insert hardware photos here.
-
 <img width="458" alt="截屏2025-04-25 12 48 09" src="https://github.com/user-attachments/assets/953c97ac-b629-4b0d-af6e-091283f4fdf0" />
 
 ![IMG_6411](https://github.com/user-attachments/assets/8dc4543e-e9e4-4c7a-b5c1-96cf18893bfc)
