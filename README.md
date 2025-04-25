@@ -1,72 +1,116 @@
 # Bubble Memo Clock Documentation
 
-## Overview
+## Introduction
 
-**Bubble Memo Clock** is a hardware extension of my **Bubble Memo App**, transforming digital task reminders into a physical, interactive experience. The device allows users to interact with their to-do list through a tactile interface, using light and sound feedback to guide them through their tasks.
+**Bubble Memo Clock** is a handcrafted interactive hardware inspired by the **Bubble Memo App**, extending the digital experience of task management into a tangible, playful form. This clock functions not just as a timepiece but as an **interactive reminder system**, blending light, touch, and sound to encourage users to complete tasks. 
 
----
-
-## Concept
-
-- The design stems from the need to make reminders more **intuitive**, **tangible**, and **playful**.
-- Users interact via:
-  - **Knob (Angle Sensor)**: to scroll through tasks.
-  - **Button**: to confirm task completion.
-  - **LED Ring**: provides soft visual feedback.
-- The clock cycles through four states:
-  - **Idle**
-  - **Select**
-  - **Remind**
-  - **Complete**
+It evolved through multiple **design** and **code iterations**, refining both the **form** and **behavior** of the device. The clock allows users to input a to-do list, interact with tasks using a knob and button, and receive reminders via light animations.
+<img width="1470" alt="截屏2025-04-25 12 46 55" src="https://github.com/user-attachments/assets/91222a67-4bf8-43c8-aa80-802a93f58f25" />
 
 ---
 
-## Design Iterations
+## Project Timeline & Iterations
 
-### Hardware
+### 1. Concept Formation
 
-1. **First Iteration**:
-   - Tried 3D printing the case.
-   - Faced issues: material fragility, complexity in print design.
-   - Decision: drop 3D printing.
+- Origin: Based on the **Bubble Memo App** — a soft, friendly UI for task reminders.
+- Idea: Extend this interaction to a **physical object** using LED lights, sensors, and manual input (knob, button).
 
-2. **Second Iteration**:
-   - Chose **handcrafting** for flexibility and better control.
-   - LED strip integrated, approx. **2cm width**.
-   - Overall aesthetic kept in line with **Bubble Memo App** visuals.
+### 2. First Hardware Prototype (3D Printed)
 
-   **Note**: Insert image of hardware prototype here.
+- Attempted to create a **3D printed shell**.
+- Problems:
+  - Fragile material.
+  - Inaccurate prints, poor fit for electronics.
+  - Difficulties with integrating LED strip cleanly.
+- Result: Abandoned 3D printing.
+![421744780570_ pic](https://github.com/user-attachments/assets/d1f2b0cb-92c2-495b-80b3-1766a7ef7d3a)
+![image](https://github.com/user-attachments/assets/0ffc215e-6d3e-49de-86e4-99a3341e6736)
+<img width="612" alt="截屏2025-04-25 12 37 56" src="https://github.com/user-attachments/assets/bb9c8510-fcbe-42c8-a7e8-d49e19391847" />
 
-### Software (Code)
+### 3. Second Hardware Prototype (Handcrafted)
 
-1. **Original Logic**:
-   - Basic state transitions based on knob rotation and button press.
-   - LED colors less distinct.
-   - Notification logic was simpler.
+- Switched to **handmade construction** for flexibility.
+- Used **2cm LED strip** around the circular edge.
+- Maintained Bubble Memo's **playful aesthetic**.
 
-2. **Refined Logic**:
-   - Updated LED colors: **higher brightness**, **lower saturation**, more **pastel-like**.
-   - Added flashing effect for notifications.
-   - Improved debounce and ADC deadband logic.
-   - Enhanced timer handling for **REMIND** and **COMPLETE** states.
+**Note**: Insert hardware photos here.
 
----
+<img width="458" alt="截屏2025-04-25 12 48 09" src="https://github.com/user-attachments/assets/953c97ac-b629-4b0d-af6e-091283f4fdf0" />
 
-## User Flow
-
-### Refined Flowchart:
-1. Start in **Idle** (shows time, waiting for knob input).
-2. Knob touched → enter **Select** (choose task).
-3. If no button press in 10s → enter **Remind**, LED off, flash for notification.
-4. Button pressed → **Complete**, LED turns orange.
-5. If no button press in 5s in **Complete** → return to **Select**.
-6. Button press again → back to **Idle**.
-
-**Note**: Insert flowchart images here.
+![IMG_6411](https://github.com/user-attachments/assets/8dc4543e-e9e4-4c7a-b5c1-96cf18893bfc)
+process testing demo video:
+https://drive.google.com/file/d/1bsgtXWc7cvYt24mycBALA3lmW_aHk7Q8/view?usp=drive_link
 
 ---
 
-## Full Code
+## Functional Overview
+
+- **Input**: To-do list provided via interface (linked to app conceptually).
+- **Interaction**:
+  - **Knob (Angle Sensor)**: Select specific task zones (mapped 1-5).
+  - **Button**: Confirm or complete tasks.
+- **Feedback**:
+  - **LED Visuals**: Color-coded states.
+  - **Flashing Notifications**: For reminders.
+  - **Sound Effects** (Planned): In future iterations.
+- **Idle Mode**: Shows time, monitors light level (day/night detection).
+
+---
+
+## State Machine & Logic Updates
+
+### States:
+1. **Idle**:
+   - Clock shows time.
+   - Light sensor detects day/night (prints 'light' or 'dark').
+   - LED stays **pink**.
+   - Any knob movement triggers **Select** state.
+
+2. **Select**:
+   - User selects tasks (1-5) by rotating knob.
+   - LED turns **light green**.
+   - Press button → enter **Remind**.
+
+3. **Remind**:
+   - LED turns off.
+   - Every 10s → flash **light blue**, print 'notification'.
+   - Button press → enter **Complete**.
+
+4. **Complete**:
+   - LED **light orange**.
+   - If no interaction for **5s** → return to **Select**.
+   - Button press → return to **Idle**.
+
+---
+
+### Updated Logic Compared to First Version:
+- Added **Idle state** with **light detection** (day/night).
+- Refined LED colors: **higher brightness**, **lower saturation**, **softer tones**.
+- **Notification now flashes twice**, instead of steady light.
+- Added **auto-return** logic:
+  - Remind: re-triggers every 10s until user responds.
+  - Complete: auto-back to Select after 5s idle.
+
+---
+
+## Flowchart Evolution
+
+### First Version:
+- No **Idle** state, task flow started from **Select**.
+- **Notification** was just a print, no flash.
+- **Complete** didn’t auto-return.
+
+### Refined Version:
+- Added **Idle** as default.
+- Added **light sensor interaction**.
+- Improved transitions and visual feedback.
+
+<img width="1494" alt="截屏2025-04-25 12 22 44" src="https://github.com/user-attachments/assets/0ee8b308-95bb-487c-ac2f-c7e66653b75d" />
+
+---
+
+## Full Code (Updated)
 
 ```python
 from machine import Pin, ADC
@@ -195,19 +239,31 @@ while True:
     time.sleep_ms(60)
 
 
-Reflections & Future Opportunities
-Opportunity for Better Integration:
+## Final outcome
+![IMG_4761](https://github.com/user-attachments/assets/6eb5e163-f079-4079-9759-e656d4c2d717)
+![IMG_4760](https://github.com/user-attachments/assets/642bc3f8-cb46-470c-85d1-061f1bdd3200)
+final outcome video:
+https://drive.google.com/file/d/1-BwaicnPxT2rzJI9xhWnfyN2QR30XX0n/view?usp=drive_link
 
-Add infrared sensors to detect user proximity (suggested during critique).
+## Future Improvements
 
-Trigger dynamic effects based on user interaction beyond button/knob.
+### Infrared Sensor:
+- Detect user presence, trigger lighting or sound effects.
+- Enable more immersive, automatic interaction.
 
-Explore better handcraft techniques or light diffusion materials.
+### Sound Integration:
+- Add sound modules for more engaging notifications.
 
-Learning Points:
+### Material Refinement:
+- Use better light diffusion for LED strip.
+- Refine handcraft details for durability.
 
-Moving from 3D printing to handcrafting opened more flexibility.
+---
 
-Importance of color tuning for emotional design.
+## Reflections
 
-State management in hardware systems mirrors app logic, but with unique physical challenges.
+- Learned importance of **iteration** in both hardware and code.
+- Moving from **3D printing to handcrafting** improved design flexibility.
+- Realized how **physical interaction** changes how users engage with tasks.
+- This project showed me how **digital ideas** can come alive through simple, yet meaningful **embedded design**.
+
