@@ -235,7 +235,7 @@ while True:
             print('idle')
 
     time.sleep_ms(60)
-
+```
 
 ## Final outcome
 ![IMG_4761](https://github.com/user-attachments/assets/6eb5e163-f079-4079-9759-e656d4c2d717)
