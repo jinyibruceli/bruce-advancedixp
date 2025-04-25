@@ -1,105 +1,213 @@
-# Drone Impact Detection System
+# Bubble Memo Clock Documentation
 
-## Introduction
-This project is a **drone impact detection system** that triggers an LED animation upon collision. The system detects collisions using **metal plates (initially copper, later switched to aluminum for increased surface area)**. When the plates make contact, they activate a programmed sequence of LED color changes.
+## Overview
 
-The design includes a **large paper airplane** structure to accommodate electronic components, with the impact detection system placed at the **front** to act as a counterweight.
-
-The development of this system went through **three iterations**, refining the impact detection mechanism and optimizing component placement.
+**Bubble Memo Clock** is a hardware extension of my **Bubble Memo App**, transforming digital task reminders into a physical, interactive experience. The device allows users to interact with their to-do list through a tactile interface, using light and sound feedback to guide them through their tasks.
 
 ---
 
-## State Diagram
-_(Insert state diagram here)_
+## Concept
 
-This diagram outlines the interactive behavior of the prototype, illustrating how the system transitions between different states when an impact occurs.
-
----
-
-## Hardware
-The project consists of the following hardware components:
-
-- **ESP32 (or compatible microcontroller)** – Handles input from impact sensor and controls LED outputs.
-- **Aluminum impact plates** – Detect physical contact and trigger the system.
-- **NeoPixel LED strip (30 LEDs, connected to Pin 7)** – Displays impact animations.
-- **Built-in NeoPixel LED (Pin 1)** – Provides immediate visual feedback.
-- **Wires and connectors** – Ensure reliable connections between components.
-
-_(Include wiring diagram/image here)_
+- The design stems from the need to make reminders more **intuitive**, **tangible**, and **playful**.
+- Users interact via:
+  - **Knob (Angle Sensor)**: to scroll through tasks.
+  - **Button**: to confirm task completion.
+  - **LED Ring**: provides soft visual feedback.
+- The clock cycles through four states:
+  - **Idle**
+  - **Select**
+  - **Remind**
+  - **Complete**
 
 ---
 
-## Firmware
-Below is the MicroPython code running on the microcontroller:
+## Design Iterations
+
+### Hardware
+
+1. **First Iteration**:
+   - Tried 3D printing the case.
+   - Faced issues: material fragility, complexity in print design.
+   - Decision: drop 3D printing.
+
+2. **Second Iteration**:
+   - Chose **handcrafting** for flexibility and better control.
+   - LED strip integrated, approx. **2cm width**.
+   - Overall aesthetic kept in line with **Bubble Memo App** visuals.
+
+   **Note**: Insert image of hardware prototype here.
+
+### Software (Code)
+
+1. **Original Logic**:
+   - Basic state transitions based on knob rotation and button press.
+   - LED colors less distinct.
+   - Notification logic was simpler.
+
+2. **Refined Logic**:
+   - Updated LED colors: **higher brightness**, **lower saturation**, more **pastel-like**.
+   - Added flashing effect for notifications.
+   - Improved debounce and ADC deadband logic.
+   - Enhanced timer handling for **REMIND** and **COMPLETE** states.
+
+---
+
+## User Flow
+
+### Refined Flowchart:
+1. Start in **Idle** (shows time, waiting for knob input).
+2. Knob touched → enter **Select** (choose task).
+3. If no button press in 10s → enter **Remind**, LED off, flash for notification.
+4. Button pressed → **Complete**, LED turns orange.
+5. If no button press in 5s in **Complete** → return to **Select**.
+6. Button press again → back to **Idle**.
+
+**Note**: Insert flowchart images here.
+
+---
+
+## Full Code
 
 ```python
 from machine import Pin, ADC
-from time import sleep, sleep_ms, ticks_ms
 from neopixel import NeoPixel
+import time, utime
 
-# Configure impact sensor input
-touch_pin = Pin(1, Pin.IN, Pin.PULL_UP)
+# ───────────────────────────────────────────────
+# 1. NeoPixel Setup
+# ───────────────────────────────────────────────
+LED_PIN   = 7
+LED_COUNT = 30
+LED       = NeoPixel(Pin(LED_PIN, Pin.OUT), LED_COUNT)
 
-# Configure LED outputs
-np = NeoPixel(Pin(35), 1)   # Built-in LED
-np7 = NeoPixel(Pin(7), 30)  # External LED strip
+# ───────────────────────────────────────────────
+# 2. Hardware Mapping
+# ───────────────────────────────────────────────
+ANGLE = ADC(Pin(1));  ANGLE.atten(ADC.ATTN_11DB)
+LIGHT = ADC(Pin(2));  LIGHT.atten(ADC.ATTN_11DB)
+BTN   = Pin(6, Pin.IN, Pin.PULL_UP)
 
-# Define colors
-GREEN = (0, 255, 0)   # Default state
-RED = (255, 0, 0)     # Impact detected
-OFF = (0, 0, 0)       # LEDs off
+# ───────────────────────────────────────────────
+# 3. Color Palette (Soft, High Brightness, Low Saturation)
+# ───────────────────────────────────────────────
+COL_IDLE       = (255, 190, 210)  # Pink
+COL_SELECT     = (190, 255, 190)  # Light Green
+COL_COMPLETE   = (255, 235, 180)  # Light Orange (updated for better contrast)
+COL_NOTIFICATION = (190, 200, 255)  # Light Blue for flashing
 
-# Function to set all LEDs
-def set_all_leds(color):
-    np[0] = color
-    np.write()
-    for i in range(30):
-        np7[i] = color
-    np7.write()
+# ───────────────────────────────────────────────
+# 4. State Machine Constants & Runtime Params
+# ───────────────────────────────────────────────
+IDLE, SELECT, REMIND, COMPLETE = range(4)
+state            = IDLE
+zone             = -1
+last_btn_level   = 1
+last_adc         = ANGLE.read()
+DEADBAND         = 200
+DAY_TH           = 1500
+last_light_state = None
+REMIND_INTERVAL  = 10_000
+remind_timer_ms  = 0
+complete_timer_ms= 0
 
-# Default: Green
-touch_state = False
-set_all_leds(GREEN)
+def knob_zone(val):            # Map 0-4095 into 5 zones
+    return 1 + int((val / 4095) * 5)
 
+def set_led(rgb):              # Steady light
+    LED.fill(rgb)
+    LED.write()
+
+def flash_led(rgb, times=2, on_ms=200, off_ms=200):  # Flash effect
+    for _ in range(times):
+        LED.fill(rgb); LED.write()
+        time.sleep_ms(on_ms)
+        LED.fill((0,0,0)); LED.write()
+        time.sleep_ms(off_ms)
+
+# ───────────────────────────────────────────────
+# 5. Boot → Idle State
+# ───────────────────────────────────────────────
+set_led(COL_IDLE)
+print('idle')
+
+# ───────────────────────────────────────────────
+# 6. Main Loop
+# ───────────────────────────────────────────────
 while True:
-    if touch_pin.value() == 0 and not touch_state:
-        touch_state = True
-        set_all_leds(RED)
-        sleep(2)
-        for _ in range(2):
-            set_all_leds(RED)
-            sleep(1)
-            set_all_leds(OFF)
-            sleep(0.5)
-        set_all_leds(RED)
-    elif touch_pin.value() == 1 and touch_state:
-        touch_state = False
-        set_all_leds(GREEN)
-    sleep_ms(10)
-```
+    now_ms  = time.ticks_ms()
+    adc_val = ANGLE.read()
+    zone_new = knob_zone(adc_val)
 
-### Key Features:
-- **Default green light**
-- **Impact detection (plates touch)** triggers a **red light for 2 seconds**
-- **Two flashes (1s on, 0.5s off)**
-- **Permanent red light after flashes**
-- **Resets to green when plates separate**
+    btn_level   = BTN.value()
+    btn_pressed = (last_btn_level == 1 and btn_level == 0)
+    last_btn_level = btn_level
 
----
+    # ───────── Idle ─────────
+    if state == IDLE:
+        lux = LIGHT.read()
+        light_state = 'light' if lux > DAY_TH else 'dark'
+        if light_state != last_light_state:
+            print(light_state)
+            last_light_state = light_state
 
-## Physical Components
-- **Paper airplane frame** – Provides aerodynamic stability and supports electronics.
-- **3D-printed mount (optional)** – Houses electronics and impact plates.
-- **Adhesive materials (tape/glue)** – Securely attach components to the structure.
+        if zone_new != zone and abs(adc_val - last_adc) > DEADBAND:
+            zone, state = zone_new, SELECT
+            last_adc = adc_val
+            set_led(COL_SELECT)
+            print('select')
 
-_(Include images of components & assembly process)_
+    # ───────── Select ─────────
+    elif state == SELECT:
+        if zone_new != zone and abs(adc_val - last_adc) > DEADBAND:
+            zone     = zone_new
+            last_adc = adc_val
+            print(zone)                       # Print 1-5
+        if btn_pressed:
+            state = REMIND
+            remind_timer_ms = now_ms
+            LED.fill((0,0,0)); LED.write()   # LEDs off during remind
+            print('remind')
 
----
+    # ───────── Remind ─────────
+    elif state == REMIND:
+        if time.ticks_diff(now_ms, remind_timer_ms) >= REMIND_INTERVAL:
+            print('notification')
+            flash_led(COL_NOTIFICATION)      # Flash twice
+            remind_timer_ms = now_ms
+        if btn_pressed:
+            state = COMPLETE
+            complete_timer_ms = now_ms
+            set_led(COL_COMPLETE)
+            print('complete')
 
-## Project Outcome
-This system successfully detects impacts and provides clear visual feedback via an LED animation. The design has gone through multiple refinements to ensure reliability and robustness.
+    # ───────── Complete ─────────
+    elif state == COMPLETE:
+        if time.ticks_diff(now_ms, complete_timer_ms) >= 5_000:
+            state = SELECT
+            set_led(COL_SELECT)
+            print('select')
+        if btn_pressed:
+            state = IDLE
+            zone  = -1
+            set_led(COL_IDLE)
+            print('idle')
 
-_(Insert final prototype images)_
+    time.sleep_ms(60)
 
-_(Insert video demonstration link)_
 
+Reflections & Future Opportunities
+Opportunity for Better Integration:
+
+Add infrared sensors to detect user proximity (suggested during critique).
+
+Trigger dynamic effects based on user interaction beyond button/knob.
+
+Explore better handcraft techniques or light diffusion materials.
+
+Learning Points:
+
+Moving from 3D printing to handcrafting opened more flexibility.
+
+Importance of color tuning for emotional design.
+
+State management in hardware systems mirrors app logic, but with unique physical challenges.
